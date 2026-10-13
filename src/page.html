@@ -70,6 +70,12 @@ button { font: inherit; color: inherit; }
 .champs dt { font-weight: 600; font-size: 13px; line-height: 30px; }
 .champs dd { padding-left: 6px; border-bottom: 1.5px dotted var(--encre); font-family: var(--f-main); font-weight: 600; font-size: 27px; line-height: 30px; color: var(--carbone); min-width: 0; overflow-wrap: anywhere; }
 .bloc { display: flex; flex-direction: column; gap: 2px; }
+.champs dd.titulaire { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.champs dd.titulaire .lien { flex: none; color: var(--graphite); }
+.champs dt.en-haut { align-self: start; padding-top: 7px; }
+.champs dd.edition { padding-left: 0; border-bottom: none; }
+.champs dd.edition .actions { justify-content: flex-start; }
+.aide.alerte { color: var(--tampon); font-weight: 600; }
 
 /* Boutons */
 .btn { display: flex; align-items: center; justify-content: center; width: 100%; min-height: 52px; padding: 0 16px; box-sizing: border-box; border: none; border-radius: 2px; font: 700 17px/1.2 var(--f-imprime); text-align: center; cursor: pointer; }

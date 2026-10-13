@@ -9,7 +9,7 @@ const claude = path.join(racine, 'build', 'claude', 'valgrise.html');
 const site = path.join(racine, 'docs', 'index.html');
 if (!fs.existsSync(claude) || !fs.existsSync(site)) { console.error('Lance d’abord : python3 outils/assembler.py'); process.exit(1); }
 
-const essais = ['parcours', 'migration', 'migration-bras', 'migration-v6', 'reglages', 'calibrage', 'bilan', 'photos', 'ironman', 'pesee', 'copie-claude']
+const essais = ['parcours', 'migration', 'migration-bras', 'migration-v6', 'reglages', 'calibrage', 'bilan', 'photos', 'ironman', 'pesee', 'copie-claude', 'nom']
   .map(n => [n, claude]).concat([['site', site]]);
 let verifs = 0, echecs = 0;
 for (const [nom, page] of essais) {

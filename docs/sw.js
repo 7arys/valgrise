@@ -2,7 +2,7 @@
    L'assembleur remplace VERSION (empreinte des fichiers) et FICHIERS (tout le site) :
    chaque nouvelle version change ce fichier, le téléphone la télécharge en entier puis l'appli propose de recharger. */
 'use strict';
-const VERSION = '5922bb59c99a';
+const VERSION = '5cece5a97292';
 const CACHE = 'valgrise-' + VERSION;
 const FICHIERS = ["icones/apple-touch-icon.png", "icones/icone-192.png", "icones/icone-512.png", "icones/icone-masquable-512.png", "./", "kraft-grain.png", "manifest.webmanifest", "paper-fibers.png", "polices/archivo-latin-ext-wdth-normal.woff2", "polices/archivo-latin-wdth-normal.woff2", "polices/caveat-latin-400-normal.woff2", "polices/caveat-latin-500-normal.woff2", "polices/caveat-latin-600-normal.woff2", "polices/caveat-latin-700-normal.woff2", "polices/caveat-latin-ext-400-normal.woff2", "polices/caveat-latin-ext-500-normal.woff2", "polices/caveat-latin-ext-600-normal.woff2", "polices/caveat-latin-ext-700-normal.woff2", "polices/stardos-stencil-latin-400-normal.woff2", "polices/stardos-stencil-latin-700-normal.woff2"];
 const PORTEE = new URL('./', self.location).pathname;

@@ -484,7 +484,9 @@
         '<h1 class="titre-imprime">Demande de carte d’alimentation</h1><div class="filet"></div>' +
         '<p class="discret mt-12">Le Comité nourrit ceux qui rapportent plus qu’ils ne mangent. Ton survivant arrive avec une semaine de vivres.</p>' +
         '<div class="bloc mt-12"><label class="mention" for="f-nom">Nom du survivant</label>' +
-        '<input class="saisie" id="f-nom" data-champ="nom" maxlength="24" autocomplete="off" value="' + esc(f.nom) + '" placeholder="Aubin"></div>' +
+        '<input class="saisie" id="f-nom" data-champ="nom" maxlength="24" autocomplete="off" enterkeyhint="next" aria-describedby="aide-nom" value="' + esc(f.nom) + '">' +
+        '<p class="aide' + (f.erreurNom ? ' alerte' : '') + '" id="aide-nom"' + (f.erreurNom ? ' role="alert"' : '') + '>' +
+          (f.erreurNom ? 'Ton survivant a besoin d’un nom. ' : '') + 'Par exemple : Aubin, Jo, Maëlle.</p></div>' +
         '<div class="mt-8">' + blocRestaurer(true) + '</div>' +
       '</section>' +
       '<section class="objet papier feuille">' + TROMBONE +
@@ -522,12 +524,19 @@
   }
   function inscrire() {
     const f = S.form;
-    const minutes = Math.round(+f.minutes);
-    if (f.jours.length < 2) f.erreur = 'Choisis au moins deux jours d’expédition.';
+    const minutes = Math.round(+f.minutes), nom = String(f.nom || '').trim();
+    f.erreurNom = !nom;
+    if (!nom) f.erreur = 'Ton survivant a besoin d’un nom : écris-le en haut, sur la carte.';
+    else if (f.jours.length < 2) f.erreur = 'Choisis au moins deux jours d’expédition.';
     else if (!(minutes >= 15 && minutes <= 120)) f.erreur = 'La durée doit être comprise entre 15 et 120 minutes.';
     else if (!(+f.curl > 0) || (f.hipthrust && !(+f.hipthrustCharge > 0))) f.erreur = 'Indique une charge en kilos pour chaque exercice aux haltères.';
     else f.erreur = '';
-    if (f.erreur) { render(); return; }
+    if (f.erreur) {
+      render();
+      const champ = f.erreurNom ? document.getElementById('f-nom') : null;
+      if (champ) champ.focus();
+      return;
+    }
     const programme = [
       { id: 'pompes', actif: true, series: 3, niveau: +f.pompes },
       { id: 'developpe', actif: true, series: 3, charge: +f.developpe },
@@ -543,7 +552,7 @@
     ];
     S.profil = V.nouveauProfil({
       date: auj(), horodatage: new Date().toISOString(), jours: f.jours.slice().sort(), minutes: minutes,
-      nom: (f.nom || '').trim() || 'Aubin', mode: f.mode, programme: programme, priorites: f.priorites.slice()
+      nom: nom, mode: f.mode, programme: programme, priorites: f.priorites.slice()
     });
     S.seances = [];
     S.form = {};
@@ -555,6 +564,33 @@
   }
 
   // ---------- Accueil : carte d'alimentation et ordre de sortie
+  // Le nom du titulaire se corrige au crayon, sur la carte même
+  function titulaire(sv) {
+    if (!S.renommer) {
+      return '<dt>Titulaire</dt><dd class="titulaire"><span>' + esc(sv.nom) + '</span>' +
+        '<button type="button" class="lien petit-lien" data-action="renommer">Renommer</button></dd>';
+    }
+    const valeur = S.form.nouveauNom != null ? S.form.nouveauNom : sv.nom;
+    return '<dt class="en-haut"><label for="f-renommer">Titulaire</label></dt><dd class="edition">' +
+      '<input class="saisie" id="f-renommer" data-champ="nouveauNom" maxlength="24" autocomplete="off" enterkeyhint="done" value="' + esc(valeur) + '">' +
+      '<div class="actions"><button type="button" class="lien petit-lien" data-action="renommer-ok">Valider</button>' +
+      '<button type="button" class="lien petit-lien" data-action="renommer-annuler">Annuler</button></div></dd>';
+  }
+  function validerNom() {
+    const nom = String(S.form.nouveauNom == null ? '' : S.form.nouveauNom).trim();
+    if (!nom) {
+      avis('Ton survivant a besoin d’un nom.', true);
+      const champ = document.getElementById('f-renommer');
+      if (champ) champ.focus();
+      return;
+    }
+    const sv = survivant(), ancien = sv.nom;
+    S.renommer = false; delete S.form.nouveauNom;
+    if (nom === ancien) { render(); return; }
+    sv.nom = nom;
+    persister(); render();
+    avis(ancien + ' s’appelle désormais ' + nom + '.');
+  }
   function ecranAccueil() {
     const sim = S.sim, sv = survivant();
     const pleines = Math.floor(sim.xpDansNiveau / sim.xpBesoin * 10);
@@ -579,7 +615,7 @@
     }
     const carte = '<section class="objet kraft carte" aria-label="Carte d’alimentation">' + enteteCarte(numeroCarte()) +
       '<h1 class="titre-imprime">Carte d’alimentation</h1><div class="filet"></div>' +
-      '<dl class="champs"><dt>Titulaire</dt><dd>' + esc(sv.nom) + '</dd><dt>Catégorie</dt><dd>À évaluer</dd><dt>Niveau</dt><dd>' + sim.niveau + '</dd></dl>' +
+      '<dl class="champs">' + titulaire(sv) + '<dt>Catégorie</dt><dd>À évaluer</dd><dt>Niveau</dt><dd>' + sim.niveau + '</dd></dl>' +
       '<p class="mention mt-12">Expérience</p>' +
       '<div class="xp"><div class="cases" aria-hidden="true">' + cases + '</div><p class="manuscrit">' + sim.xpDansNiveau + ' sur ' + sim.xpBesoin + '</p></div>' +
       '<div class="vivres"><p class="pochoir chiffre">' + sim.stock + '</p><div><p class="sous-titre">' + (sim.stock > 1 ? 'jours de vivres' : 'jour de vivres') + '</p>' +
@@ -1729,7 +1765,14 @@
 
   // ---------- Actions
   const ACTIONS = {
-    aller: function (el) { S.ecran = el.dataset.ecran; S.confirmer = null; S.copiePrete = null; S.form = {}; render(); },
+    aller: function (el) { S.ecran = el.dataset.ecran; S.confirmer = null; S.copiePrete = null; S.renommer = false; S.form = {}; render(); },
+    renommer: function () {
+      S.renommer = true; S.form.nouveauNom = survivant().nom; render();
+      const champ = document.getElementById('f-renommer');
+      if (champ) { champ.focus(); try { champ.select(); } catch (e) { /* facultatif */ } }
+    },
+    'renommer-ok': validerNom,
+    'renommer-annuler': function () { S.renommer = false; delete S.form.nouveauNom; render(); },
     'choisir-priorites': function () { S.ecran = 'survivant'; S.confirmer = null; S.form = {}; S.ancre = 'priorites'; render(); },
     duree: function (el) {
       S.profil.plan.minutes = +el.dataset.minutes;
@@ -2020,6 +2063,13 @@
     if (el.dataset.type === 'nombre') v = el.value === '' ? '' : +el.value;
     S.form[el.dataset.champ] = v;
   }
+  // Nouveau nom : Entrée valide, Échap annule
+  document.addEventListener('keydown', function (e) {
+    const el = e.target;
+    if (!el || el.id !== 'f-renommer') return;
+    if (e.key === 'Enter') { e.preventDefault(); lireChamp(el); validerNom(); }
+    else if (e.key === 'Escape') { e.preventDefault(); ACTIONS['renommer-annuler'](); }
+  });
   document.addEventListener('input', function (e) {
     const el = e.target;
     if (el.dataset && el.dataset.comparer) {
