@@ -1,0 +1,14 @@
+{
+  "name": "valgrise",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Valgrise : carnet d’entraînement dans une vallée d’après la fin du monde.",
+  "scripts": {
+    "build": "python3 outils/assembler.py",
+    "test": "node --test tests/engine.test.js && node tests/smoke/tout.js"
+  },
+  "devDependencies": {
+    "fake-indexeddb": "^6.2.5",
+    "jsdom": "^24.1.3"
+  }
+}

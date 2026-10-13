@@ -1,0 +1,26 @@
+<script>
+/* Version installable : stockage durable, hors connexion, mises à jour. */
+(function () {
+  'use strict';
+  try {
+    if (navigator.storage && navigator.storage.persisted) {
+      navigator.storage.persisted().then(function (oui) { if (!oui && navigator.storage.persist) return navigator.storage.persist(); }).catch(function () {});
+    }
+  } catch (e) { /* facultatif */ }
+  if (!('serviceWorker' in navigator)) return;
+  // Une nouvelle version prend la main : l'appli propose de recharger (pas à la toute première installation).
+  let dejaControle = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.addEventListener('controllerchange', function () {
+    if (dejaControle) window.dispatchEvent(new Event('valgrise:maj'));
+    dejaControle = true;
+  });
+  window.addEventListener('load', function () {
+    navigator.serviceWorker.register('sw.js').then(function (reg) {
+      // Sur iPhone, l'appli reste souvent ouverte en arrière-plan : on cherche une mise à jour à chaque retour.
+      document.addEventListener('visibilitychange', function () {
+        if (document.visibilityState === 'visible') reg.update().catch(function () {});
+      });
+    }).catch(function () {});
+  });
+})();
+</script>
