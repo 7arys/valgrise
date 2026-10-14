@@ -244,7 +244,7 @@ test('mise à jour v2 : la priorité biceps devient bras et ajoute le triceps, a
   p.programme.push({ id: 'chinup', actif: true, series: 3, niveau: 2 }, { id: 'releves', actif: true, series: 3, niveau: 0 });
   p.priorites = ['biceps', 'abdos'];
   V.migrer(p);
-  assert.equal(p.v, 10);
+  assert.equal(p.v, 11);
   assert.deepEqual(p.priorites, ['bras', 'abdos']);
   assert.equal(p.programme.find(e => e.id === 'triceps').actif, true);
   assert.equal(V.reglage(p.programme.find(e => e.id === 'triceps')), 'Élastique de 10 kg');
@@ -259,7 +259,7 @@ test('mise à jour d’une partie v1 : relevés séparés de la roulette, priori
   ancien.programme[3].niveau = 3; // ancien « Relevés de genoux à la barre »
   ancien.programme.push({ id: 'squat', actif: false, series: 3, charge: 12 }); // l'ancien goblet squat, inactif en v1
   const p = V.migrer(JSON.parse(JSON.stringify(ancien)));
-  assert.equal(p.v, 10);
+  assert.equal(p.v, 11);
   assert.deepEqual(p.elastiques, [5, 10, 15, 20]);
   assert.deepEqual(p.pesees, []);
   assert.equal(p.rappelPesee, 'matin');
@@ -344,7 +344,7 @@ test('mise à jour v6 : squat au poids du corps, extension triceps à l’élast
     { id: 'hipthrust', actif: true, series: 3, charge: 16 }
   );
   V.migrer(p);
-  assert.equal(p.v, 10);
+  assert.equal(p.v, 11);
   const squat = p.programme.find(e => e.id === 'squat'), triceps = p.programme.find(e => e.id === 'triceps');
   assert.equal(squat.niveau, 1);
   assert.equal(squat.charge, undefined);
@@ -507,7 +507,7 @@ test('mise à jour v7 : l’échelle du squat se décale d’un cran, le kit d�
     'Squat à l’élastique de 25 kg (10 + 15)', 'Squat à l’élastique de 35 kg (15 + 20)'
   ]);
   avant.forEach(p => {
-    assert.equal(p.v, 10);
+    assert.equal(p.v, 11);
     assert.deepEqual(p.elastiques, [5, 10, 15, 20]);
     assert.deepEqual(p.annonces, ['reglages', 'calibrage']);
     assert.deepEqual(V.migrer(JSON.parse(JSON.stringify(p))), p, 'une deuxième mise à jour ne change rien');
@@ -660,7 +660,7 @@ test('mise à jour v9 : invitation au bilan seulement après une première visit
   const avec = profil(); avec.v = 8; avec.mesures.push({ id: 'v1', date: D, bras: 31 });
   const sans = profil(); sans.v = 8;
   V.migrer(avec); V.migrer(sans);
-  assert.equal(avec.v, 10);
+  assert.equal(avec.v, 11);
   assert.deepEqual(avec.annonces, ['bilan', 'photos']);
   assert.equal(sans.annonces, undefined);
 });
@@ -722,8 +722,107 @@ test('mise à jour v10 : élévations latérales au programme (inactives), fiche
   p.programme = p.programme.filter(e => e.id !== 'elevations');
   p.mesures.push({ id: 'v1', date: D, bras: 31 });
   V.migrer(p);
-  assert.equal(p.v, 10);
+  assert.equal(p.v, 11);
   assert.deepEqual(p.programme.find(e => e.id === 'elevations'), { id: 'elevations', actif: false, series: 3, charge: 5 });
   assert.deepEqual([p.photos, p.rapports, p.annonces], [[], [], ['photos']]);
   assert.deepEqual(V.migrer(JSON.parse(JSON.stringify(p))), p);
+});
+
+// ---------- Exercices à charge : le coach bouge la charge, pas la fourchette
+test('charge : trop léger dès la première séance, l’élastique au-dessus, la fourchette en alternative', () => {
+  const p = profil();
+  const dev = p.programme[1];
+  dev.charge = 25;
+  const a = avecSeance(p, [], D, [{ id: 'developpe', reglage: V.reglage(dev, p), prevu: 3, series: [20, 20, 18] }]);
+  const props = V.calibrer(p, a);
+  assert.equal(props.length, 1);
+  assert.equal(props[0].sens, 1);
+  assert.equal(props[0].vers.charge, 30);
+  assert.equal(props[0].texte, 'Élastique de 30 kg (10 + 20)');
+  assert.equal(props[0].saut, undefined);
+  assert.deepEqual(props[0].alternative, [15, 25]);
+  V.repondreCalibrage(p, 'developpe', true);
+  assert.equal(p.programme[1].charge, 30);
+  assert.equal(V.estCalibre(p.programme[1]), true, 'nouvelle charge : pas de recalibrage, la double progression suit');
+  assert.equal(V.fourchette(p.programme[1]).max, 12, 'la fourchette du coach reste');
+});
+
+test('charge : beaucoup trop léger, plusieurs crans d’un coup', () => {
+  const p = profil();
+  p.programme[1].charge = 25;
+  const a = avecSeance(p, [], D, [{ id: 'developpe', reglage: V.reglage(p.programme[1], p), prevu: 3, series: [30, 28, 25] }]);
+  assert.equal(V.calibrer(p, a)[0].texte, 'Élastique de 35 kg (15 + 20)');
+});
+
+test('charge : un gros cran est proposé quand même, signalé comme tel', () => {
+  const p = profil();
+  const a = avecSeance(p, [], D, [{ id: 'curl', reglage: V.reglage(p.programme[2], p), prevu: 3, series: [15, 15, 14] }]);
+  const x = V.calibrer(p, a)[0];
+  assert.equal(x.vers.charge, 10);
+  assert.equal(x.saut, true);
+  assert.deepEqual(x.alternative, [12, 20]);
+});
+
+test('charge : trop lourd, l’élastique en dessous ; au bout de l’échelle, la fourchette s’adapte', () => {
+  const p = profil();
+  p.programme[1].charge = 20;
+  const a = avecSeance(p, [], D, [{ id: 'developpe', reglage: V.reglage(p.programme[1], p), prevu: 3, series: [6, 5, 4] }]);
+  const x = V.calibrer(p, a)[0];
+  assert.equal(x.sens, -1);
+  assert.equal(x.vers.charge, 15);
+  const q = profil();
+  q.programme[1].charge = 5;
+  const b = avecSeance(q, [], D, [{ id: 'developpe', reglage: V.reglage(q.programme[1], q), prevu: 3, series: [4, 3, 3] }]);
+  const y = V.calibrer(q, b)[0];
+  assert.equal(y.vers, undefined);
+  assert.deepEqual(y.reps, [3, 5]);
+});
+
+test('charge : dans la fourchette, rien à proposer ; l’alternative garde la charge', () => {
+  const p = profil();
+  p.programme[1].charge = 25;
+  const a = avecSeance(p, [], D, [{ id: 'developpe', reglage: V.reglage(p.programme[1], p), prevu: 3, series: [12, 10, 9] }]);
+  assert.equal(V.calibrer(p, a).length, 0);
+  assert.equal(V.estCalibre(p.programme[1]), true);
+  const q = profil();
+  q.programme[1].charge = 25;
+  const b = avecSeance(q, [], D, [{ id: 'developpe', reglage: V.reglage(q.programme[1], q), prevu: 3, series: [20, 20, 18] }]);
+  V.calibrer(q, b);
+  V.repondreCalibrage(q, 'developpe', 'alt');
+  assert.equal(q.programme[1].charge, 25);
+  assert.deepEqual(q.programme[1].reps, [15, 25]);
+  assert.equal(V.estCalibre(q.programme[1]), true);
+});
+
+test('charge changée en cours de séance : la double progression lit le dernier réglage', () => {
+  const p = profil();
+  const dev = p.programme[1];
+  dev.charge = 30; dev.calibre = 'charge';
+  const s = [];
+  const deux = [{ id: 'developpe', reglage: 'Élastique de 25 kg (10 + 15)', prevu: 1, series: [14] },
+    { id: 'developpe', reglage: 'Élastique de 30 kg (10 + 20)', prevu: 2, series: [12, 12] }];
+  avecSeance(p, s, D, deux);
+  avecSeance(p, s, V.addDays(D, 3), deux);
+  const sug = V.suggestions(p, s).filter(x => x.id === 'developpe');
+  assert.equal(sug.length, 1);
+  assert.equal(sug[0].vers, 'Élastique de 35 kg (15 + 20)');
+});
+
+test('mise à jour v11 : une fourchette en attente pour un exercice à charge devient une charge', () => {
+  const p = profil();
+  p.v = 10;
+  p.programme[1].charge = 25;
+  const abdos = p.programme[3];
+  p.calibrages = [
+    { id: 'developpe', cle: 'charge', reglage: V.reglage(p.programme[1], p), seance: 's1', series: [20, 20, 18], reps: [15, 25] },
+    { id: 'abdos', cle: 'n2', reglage: V.reglage(abdos, p), seance: 's1', series: [12, 12, 11], reps: [10, 15] }
+  ];
+  V.migrer(p);
+  assert.equal(p.v, 11);
+  const dev = p.calibrages.find(x => x.id === 'developpe'), ab = p.calibrages.find(x => x.id === 'abdos');
+  assert.equal(dev.vers.charge, 30);
+  assert.equal(dev.reps, undefined);
+  assert.deepEqual(dev.alternative, [15, 25]);
+  assert.deepEqual(ab.reps, [10, 15], 'les exercices au poids du corps gardent leur proposition');
+  assert.equal(V.calibragesEnAttente(p).length, 2);
 });

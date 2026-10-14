@@ -46,7 +46,7 @@ setTimeout(() => {
   try {
     const p = stocke().profil;
     const squat = p.programme.find(e => e.id === 'squat'), triceps = p.programme.find(e => e.id === 'triceps'), ht = p.programme.find(e => e.id === 'hipthrust');
-    verifier(p.v === 10 && squat.niveau === 1 && squat.charge === undefined && triceps.charge === 10 && ht.charge === 10, 'partie passée en v10 : squat au poids du corps, triceps à 10 kg d’élastique, hip thrust intact');
+    verifier(p.v === 11 && squat.niveau === 1 && squat.charge === undefined && triceps.charge === 10 && ht.charge === 10, 'partie passée en v11 : squat au poids du corps, triceps à 10 kg d’élastique, hip thrust intact');
     verifier(/J’ai suivi ton choix : le squat repart au poids du corps, puis passera aux élastiques quand il deviendra trop facile ; l’extension triceps se fait à l’élastique de 10 kg\./.test(texte()), 'le coach annonce le changement de matériel');
     verifier(/Squat au poids du corps/.test(texte()) && /Extension triceps à l’élastique/.test(texte()) && !/Goblet/.test(texte()), 'l’ordre de sortie suit le nouveau matériel');
     verifier(/Priorités : bras et jambes, fessiers/.test(texte()), 'les priorités sont conservées');

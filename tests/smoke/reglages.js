@@ -40,7 +40,7 @@ const exo = id => stocke().programme.find(e => e.id === id);
 
 setTimeout(() => {
   try {
-    verifier(stocke().v === 10 && exo('squat').niveau === 1 && JSON.stringify(stocke().elastiques) === '[5,10,15,20]', 'partie v6 passée en v10 : squat au poids du corps conservé, kit d’élastiques enregistré');
+    verifier(stocke().v === 11 && exo('squat').niveau === 1 && JSON.stringify(stocke().elastiques) === '[5,10,15,20]', 'partie v6 passée en v11 : squat au poids du corps conservé, kit d’élastiques enregistré');
     verifier(/Nouveau : tu règles toi-même le nombre de répétitions/.test(texte()) && /t’asseoir sur ton banc/.test(texte()), 'le coach annonce les nouveaux réglages');
     clic('[data-action="voir-reglages"]');
     verifier(/Mon programme/.test(texte()) && w.__ancre === 'programme' && JSON.stringify(stocke().annonces) === '["calibrage","bilan","photos"]', 'le lien ouvre le programme et range la note');

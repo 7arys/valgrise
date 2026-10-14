@@ -304,7 +304,7 @@
   // ---------- État du jeu
   let migre = false;
   function migrerProfil(p) {
-    if (p && (p.v || 1) < 10) migre = true;
+    if (p && (p.v || 1) < 11) migre = true;
     return V.migrer(p);
   }
   function recalculer() {
@@ -1065,6 +1065,13 @@
       '</section>';
   }
 
+  // « l'élastique de 30 kg (10 + 20) », « 10 kg par haltère », « un haltère de 12 kg »
+  function chargeEnClair(ex) {
+    const c = V.CATALOGUE[ex.id];
+    if (c.type === 'charge') return c.unHaltere ? 'un haltère de ' + V.kgTexte(ex.charge) + ' kg' : V.kgTexte(ex.charge) + ' kg par haltère';
+    if (c.type === 'mixte' && ex.niveau < c.variantes.length) return c.variantes[ex.niveau].toLowerCase();
+    return 'l’élastique de ' + V.libelleElastique(ex.charge, S.profil);
+  }
   function noteCoach() {
     const liste = V.suggestions(S.profil, S.seances).filter(function (s) { return !S.ignorees[s.id + '|' + s.vers]; });
     let html = '';
@@ -1106,12 +1113,23 @@
     V.calibragesEnAttente(S.profil).forEach(function (x) {
       const ex = S.profil.programme.filter(function (e) { return e.id === x.id; })[0];
       const nom = V.nomExercice(ex, S.profil), f = V.fourchette(ex);
-      const texte = x.reps
-        ? nom + ' : tu as fait ' + listeFr(x.series) + '. Je te propose ' + x.reps[0] + ' à ' + x.reps[1] + ' répétitions par série.'
-        : nom + ' : ' + (x.sens < 0 ? 'trop dur pour l’instant' : 'trop facile') + ', avec ' + listeFr(x.series) + '. Je te propose : ' + x.texte.charAt(0).toLowerCase() + x.texte.slice(1) + '.';
-      html += '<div class="mt-8"><p class="manuscrit graphite">' + esc(texte) + '</p>' +
-        '<div class="actions"><button type="button" class="lien" data-action="calibrage" data-ex="' + x.id + '" data-ok="1">Appliquer</button>' +
-        '<button type="button" class="lien" data-action="calibrage" data-ex="' + x.id + '" data-ok="0">' + (x.reps ? 'Garder ' + f.min + ' à ' + f.max : 'Garder ce réglage') + '</button></div></div>';
+      const lien = function (ok, libelle) { return '<button type="button" class="lien" data-action="calibrage" data-ex="' + x.id + '" data-ok="' + ok + '">' + esc(libelle) + '</button>'; };
+      let texte, liens;
+      if (x.charge) {
+        // Exercice à charge : la charge bouge, la fourchette reste ; garder la charge avec plus de répétitions est l'alternative
+        texte = V.CATALOGUE[ex.id].nom + ' : ' + listeFr(x.series) + ' répétitions avec ' + chargeEnClair(ex) + '. ' +
+          (x.sens > 0 ? 'Trop léger' : 'Trop lourd pour l’instant') + ' : je te propose ' + chargeEnClair(x.vers) + ', pour rester entre ' + f.min + ' et ' + f.max + '.' +
+          (x.saut ? ' Le cran est gros : vise d’abord le bas de la fourchette.' : '');
+        liens = lien('1', 'Passer à ' + V.kgTexte(x.vers.charge) + ' kg') +
+          (x.alternative ? lien('alt', 'Garder ' + V.kgTexte(ex.charge) + ' kg, viser ' + x.alternative[0] + ' à ' + x.alternative[1]) : '') +
+          lien('0', 'Ne rien changer');
+      } else {
+        texte = x.reps
+          ? nom + ' : tu as fait ' + listeFr(x.series) + '. Je te propose ' + x.reps[0] + ' à ' + x.reps[1] + ' répétitions par série.'
+          : nom + ' : ' + (x.sens < 0 ? 'trop dur pour l’instant' : 'trop facile') + ', avec ' + listeFr(x.series) + '. Je te propose : ' + x.texte.charAt(0).toLowerCase() + x.texte.slice(1) + '.';
+        liens = lien('1', 'Appliquer') + lien('0', x.reps ? 'Garder ' + f.min + ' à ' + f.max : 'Garder ce réglage');
+      }
+      html += '<div class="mt-8"><p class="manuscrit graphite">' + esc(texte) + '</p><div class="actions">' + liens + '</div></div>';
     });
     if (S.profil.priorites == null) {
       html += '<div class="mt-8"><p class="manuscrit graphite">Nouveau : choisis jusqu’à deux groupes musculaires prioritaires. Je les mettrai en tête de séance, avec plus de séries.</p>' +
@@ -1165,13 +1183,44 @@
     const triees = S.seances.filter(function (x) { return x.genre === 'expedition'; })
       .sort(function (a, b) { return a.debut < b.debut ? 1 : -1; });
     for (let i = 0; i < triees.length; i++) {
-      const e = (triees[i].exercices || []).filter(function (y) { return y.id === exo.id; })[0];
-      if (!e) continue;
-      if (e.reglage === exo.reglage && e.series[serie] != null) return e.series[serie];
+      const l = (triees[i].exercices || []).filter(function (y) { return y.id === exo.id; });
+      if (!l.length) continue;
+      const e = l.filter(function (y) { return y.reglage === exo.reglage; }).pop();
+      if (e && e.series[serie] != null) return e.series[serie];
       break;
     }
     return exo.min;
   }
+  // Une ligne par réglage : si la charge a changé en cours d'exercice, les séries d'avant gardent la leur
+  function entreesSeance(e) {
+    if (!e.reglagesFaits) return [{ id: e.id, nom: e.nom, reglage: e.reglage, prevu: e.series, series: e.faites }];
+    const groupes = [];
+    e.faites.forEach(function (v, i) {
+      const r = e.reglagesFaits[i] || e.reglage, g = groupes[groupes.length - 1];
+      if (g && g.reglage === r) g.series.push(v);
+      else groupes.push({ id: e.id, nom: V.CATALOGUE[e.id].type === 'mixte' ? r : e.nom, reglage: r, series: [v] });
+    });
+    let reste = e.series;
+    groupes.forEach(function (g, k) {
+      g.prevu = k < groupes.length - 1 ? g.series.length : Math.max(1, reste);
+      reste -= g.series.length;
+    });
+    return groupes;
+  }
+  // Sous le nom de l'exercice : la charge d'en dessous et celle d'au-dessus
+  function controleCharge(exo) {
+    const ex = S.profil.programme.filter(function (e) { return e.id === exo.id; })[0];
+    if (!ex || !V.aCharge(ex) || V.reglage(ex, S.profil) !== exo.reglage) return '';
+    const moins = V.changerReglage(ex, -1, S.profil), plus = V.changerReglage(ex, 1, S.profil);
+    if (!moins && !plus) return '';
+    const bouton = function (vers, sens) {
+      const l = V.libelleCharge(vers, S.profil);
+      return '<button type="button" class="lien petit-lien" data-action="charge-seance" data-sens="' + sens + '" aria-label="Séries suivantes : ' + esc(l) + '">' +
+        (sens < 0 ? '‹ ' + esc(l) : esc(l) + ' ›') + '</button>';
+    };
+    return '<div class="charge-seance">' + (moins ? bouton(moins, -1) : '<span></span>') + (plus ? bouton(plus, 1) : '<span></span>') + '</div>';
+  }
+  function kgDe(reglage) { const m = /(\d+(?:,\d+)?) kg/.exec(reglage || ''); return m ? m[1] + ' kg' : 'sans élastique'; }
   function partir() {
     const exos = V.planSeance(S.profil).exos.map(function (x) {
       const c = V.CATALOGUE[x.ex.id], f = V.fourchette(x.ex), e = V.echelon(x.ex, S.profil);
@@ -1200,8 +1249,10 @@
     let lignes = '<div class="rang tete"><span>Série</span><span>Fait</span><span>Visa</span></div>';
     for (let i = 0; i < exo.series; i++) {
       const v = exo.faites[i];
+      const autreCharge = v != null && exo.reglagesFaits && exo.reglagesFaits[i] && exo.reglagesFaits[i] !== exo.reglage;
       lignes += '<div class="rang"><span class="pochoir">' + (i + 1) + '</span><span>' +
-        (v != null ? '<span class="manuscrit">' + v + '</span>' : (i === n ? '<span class="manuscrit graphite">en cours</span>' : '')) +
+        (v != null ? '<span class="manuscrit">' + v + '</span>' + (autreCharge ? ' <span class="petit">(' + esc(kgDe(exo.reglagesFaits[i])) + ')</span>' : '') :
+          (i === n ? '<span class="manuscrit graphite">en cours</span>' : '')) +
         '</span><span>' + (v != null ? tampon('VU', ROUGE, { l: 46, h: 28, taille: 13, rot: -7, classe: 'en-ligne' }) : '') + '</span></div>';
     }
     if (n >= exo.series) {
@@ -1216,6 +1267,7 @@
         '<p class="discret mt-12">Exercice ' + (b.courant + 1) + ' sur ' + b.exos.length + (exo.prio ? ', priorité ' + esc(exo.prio) : '') + '</p>' +
         '<h2 class="titre-exo">' + esc(exo.nom) + '</h2>' +
         '<p class="discret">' + esc(exo.detail || (exo.reglage !== exo.nom ? exo.reglage : '')) + '</p>' +
+        controleCharge(exo) +
         '<p class="mention mt-4">Objectif : ' + exo.series + ' séries de ' + exo.min + ' à ' + exo.max + '</p>' +
         '<div class="tableau">' + lignes + '</div>' +
         (enRepos ? '<div class="repos"><p><span class="mention">Repos </span><span class="pochoir" data-live="repos">' + mmss(b.repos - Date.now()) + '</span></p><button type="button" class="lien" data-action="passer-repos">Passer le repos</button></div>' : '') +
@@ -1242,6 +1294,7 @@
     const b = S.brouillon;
     const exo = b.exos[b.courant];
     exo.faites.push(b.reps);
+    if (exo.reglagesFaits) exo.reglagesFaits.push(exo.reglage);
     if (exo.faites.length >= exo.series) {
       b.courant++;
       if (b.courant >= b.exos.length) { sauverBrouillon(); terminer(); return; }
@@ -1306,7 +1359,7 @@
     const seance = Object.assign({
       id: b.id, date: b.date, debut: b.debut, fin: new Date().toISOString(), minutes: minutes, effort: f.effort,
       genre: 'expedition', lieu: b.lieu,
-      exercices: b.exos.filter(function (e) { return e.faites.length; }).map(function (e) { return { id: e.id, nom: e.nom, reglage: e.reglage, prevu: e.series, series: e.faites }; })
+      exercices: [].concat.apply([], b.exos.filter(function (e) { return e.faites.length; }).map(entreesSeance))
     }, faits);
     S.seances.push(seance);
     V.calibrer(S.profil, seance);
@@ -1875,10 +1928,31 @@
       if (nouvelles.length || retirees.length) enregistrerPhotos(S.jour, nouvelles, retirees);
     },
     calibrage: function (el) {
-      const oui = el.dataset.ok === '1';
-      const x = V.repondreCalibrage(S.profil, el.dataset.ex, oui);
+      const choix = el.dataset.ok === '1' ? true : el.dataset.ok === 'alt' ? 'alt' : false;
+      const x = V.repondreCalibrage(S.profil, el.dataset.ex, choix);
       recalculer(); persister(); render();
-      if (x && oui) avis(x.reps ? 'Fourchette mise à jour : ' + x.reps[0] + ' à ' + x.reps[1] + ' répétitions.' : 'Réglage mis à jour : ' + x.texte.charAt(0).toLowerCase() + x.texte.slice(1) + '.');
+      if (!x || !choix) return;
+      const r = choix === 'alt' ? x.alternative : x.reps;
+      avis(r ? 'Fourchette mise à jour : ' + r[0] + ' à ' + r[1] + ' répétitions.' : 'Réglage mis à jour : ' + x.texte.charAt(0).toLowerCase() + x.texte.slice(1) + '.');
+    },
+    // Pendant la sortie : charge plus légère ou plus lourde pour les séries suivantes ; le programme la garde
+    'charge-seance': function (el) {
+      const b = S.brouillon, exo = b && b.exos[b.courant];
+      if (!exo) return;
+      const i = S.profil.programme.map(function (e) { return e.id; }).indexOf(exo.id);
+      const ex = S.profil.programme[i];
+      if (!ex || V.reglage(ex, S.profil) !== exo.reglage) return;
+      const vers = V.changerReglage(ex, +el.dataset.sens, S.profil);
+      if (!vers) return;
+      if (!exo.reglagesFaits) exo.reglagesFaits = exo.faites.map(function () { return exo.reglage; });
+      S.profil.programme[i] = vers;
+      const c = V.CATALOGUE[vers.id], e = V.echelon(vers, S.profil);
+      exo.reglage = V.reglage(vers, S.profil);
+      exo.nom = V.nomExercice(vers, S.profil);
+      exo.detail = e ? c.nom + ', échelon ' + e.rang + ' sur ' + e.total : exo.reglage;
+      b.reps = precedent(exo, exo.faites.length);
+      sauverBrouillon(); persister(); render();
+      avis('Séries suivantes : ' + V.libelleCharge(vers, S.profil) + '. Ton programme garde ce réglage.');
     },
     regard: function () { demanderRegard(); },
     comparer: function (el) { S.comparer = { angle: el.dataset.angle, pos: 50 }; render(); },

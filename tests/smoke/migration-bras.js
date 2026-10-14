@@ -40,7 +40,7 @@ const stocke = () => JSON.parse(w.localStorage.getItem('valgrise:v1')).profil;
 setTimeout(() => {
   try {
     verifier(/Ta priorité biceps devient « Bras »/.test(texte()), 'le coach annonce le passage à « Bras »');
-    verifier(JSON.stringify(stocke().priorites) === '["bras","abdos"]' && stocke().v === 10, 'priorités converties et enregistrées');
+    verifier(JSON.stringify(stocke().priorites) === '["bras","abdos"]' && stocke().v === 11, 'priorités converties et enregistrées');
     verifier(stocke().programme.find(e => e.id === 'triceps').actif === true, 'l’extension triceps est ajoutée');
     verifier(/Priorités : bras et abdos/.test(texte()) && /Extension triceps à l’élastique/.test(texte()), 'l’ordre de sortie inclut le triceps, à l’élastique');
     clic('[data-action="annonce-lue"][data-id="triceps"]');

@@ -635,7 +635,8 @@
       const cle = reglage(ex, profil);
       const dernieres = [];
       for (let i = 0; i < triees.length && dernieres.length < 2; i++) {
-        const e = (triees[i].exercices || []).filter(function (x) { return x.id === ex.id; })[0];
+        // Charge changée en cours de séance : c'est le dernier réglage de l'exercice qui compte
+        const e = (triees[i].exercices || []).filter(function (x) { return x.id === ex.id; }).pop();
         if (!e || !e.series.length) continue;
         if (e.reglage !== cle) break;
         dernieres.push(e);
@@ -693,6 +694,48 @@
     return n;
   }
 
+  // ---------- Exercices à charge : élastiques, haltères, et squat une fois debout sur les élastiques.
+  // Quand la charge ne convient pas, c'est elle qui bouge : la fourchette du coach reste.
+  function aCharge(ex) {
+    const c = CATALOGUE[ex.id];
+    return !!c && (c.type === 'elastique' || c.type === 'charge' || (c.type === 'mixte' && ex.niveau >= c.variantes.length));
+  }
+  // Les charges possibles pour cet exercice, de la plus légère à la plus lourde
+  function chargesPossibles(ex, p) {
+    const c = CATALOGUE[ex.id];
+    if (c.type === 'elastique') return resistances(p);
+    if (c.type === 'mixte') return etapesElastique(c, p);
+    const l = [];
+    for (let k = -30; k <= 30; k++) {
+      const kg = arrondi(ex.charge + k * c.pas);
+      if (kg >= 1 && kg <= 60) l.push(kg);
+    }
+    return l;
+  }
+  // Répétitions qu'on peut attendre à `charge`, d'après `reps` faites à `kg` (formule d'Epley) : une estimation
+  function repsEstimees(kg, reps, charge) { return 30 * (kg * (1 + reps / 30) / charge - 1); }
+  // Charge visée d'après une séance : { kg } ; { rien: 'bout' } quand l'échelle s'arrête dans ce sens.
+  // Plus lourd : la charge dont l'estimation tombe le plus près du milieu de la fourchette, sans passer sous le plancher ;
+  // si même le cran suivant y passerait, c'est lui quand même ({ kg, saut: true }) : un gros cran, à prendre par le bas.
+  function chargeVisee(ex, p, series, sens) {
+    const f = fourchette(ex), cible = (f.min + f.max) / 2;
+    const moy = series.reduce(function (s, n) { return s + n; }, 0) / series.length;
+    const l = chargesPossibles(ex, p).filter(function (kg) { return sens > 0 ? kg > ex.charge : kg < ex.charge; });
+    if (!l.length) return { rien: 'bout' };
+    const estime = function (kg) { return repsEstimees(ex.charge, moy, kg); };
+    const tenables = l.filter(function (kg) { return estime(kg) >= f.min; });
+    if (!tenables.length) return sens > 0 ? { kg: l[0], saut: true } : { kg: l[0] };
+    tenables.sort(function (a, b) { return Math.abs(estime(a) - cible) - Math.abs(estime(b) - cible) || a - b; });
+    return { kg: tenables[0] };
+  }
+  // Libellé court d'une charge : « 30 kg (10 + 20) », « 10 kg », « sans élastique »
+  function libelleCharge(ex, p) {
+    const c = CATALOGUE[ex.id];
+    if (c.type === 'mixte' && ex.niveau < c.variantes.length) return 'sans élastique';
+    if (c.type === 'elastique' || c.type === 'mixte') return libelleElastique(ex.charge, p);
+    return kgTexte(ex.charge) + ' kg';
+  }
+
   // ---------- Calibrage : une fourchette tirée de ce que le joueur fait vraiment, une fois par échelon.
   // Une charge ou un élastique plus lourd ne recalibre pas : c'est la progression normale.
   function cleCalibrage(ex) {
@@ -711,26 +754,53 @@
     if (!cands.length) cands = candidates;
     return cands.slice().sort(function (x, y) { return ecart(x) - ecart(y) || x[0] - y[0]; })[0].slice();
   }
-  // Après une expédition, pour chaque exercice pas encore calibré à son échelon : une fourchette, ou un autre
-  // échelon quand c'est nettement trop dur ou trop facile. Une fourchette identique à l'actuelle vaut accord.
+  // Ce que le coach propose après une séance à un réglage pas encore calibré :
+  // - exercice à charge hors de sa fourchette : la charge visée ({ sens, vers, texte, charge: true }),
+  //   avec la fourchette où la séance tombe en alternative ;
+  // - exercice au poids du corps : un autre échelon si c'est nettement trop dur ou trop facile ;
+  // - sinon une fourchette ({ reps }) ; { calibre: true } quand il n'y a rien à proposer.
+  function evaluerCalibrage(p, ex, series) {
+    const candidates = fourchettesProposees(ex);
+    const haut = Math.max.apply(null, series), bas = Math.min.apply(null, series);
+    if (aCharge(ex)) {
+      const f = fourchette(ex);
+      const sens = bas > f.max ? 1 : haut < f.min ? -1 : 0;
+      if (!sens) return { calibre: true };
+      const v = chargeVisee(ex, p, series, sens);
+      if (v.kg != null) {
+        const vers = Object.assign({}, ex, { charge: v.kg });
+        const r = { sens: sens, vers: vers, texte: reglage(vers, p), charge: true };
+        if (v.saut) r.saut = true;
+        const alt = proposerFourchette(series, candidates);
+        if (alt && !(alt[0] === f.min && alt[1] === f.max)) r.alternative = alt;
+        return r;
+      }
+      if (sens < 0 && CATALOGUE[ex.id].type === 'mixte') {
+        const vers = changerReglage(ex, -1, p);
+        if (vers) return { sens: -1, vers: vers, texte: reglage(vers, p) };
+      }
+      // Bout de l'échelle : faute de charge, c'est la fourchette qui s'adapte
+    } else {
+      const sens = haut < candidates[0][0] ? -1 : bas > candidates[candidates.length - 1][1] ? 1 : 0;
+      const vers = sens ? changerReglage(ex, sens, p) : null;
+      if (vers) return { sens: sens, vers: vers, texte: reglage(vers, p) };
+    }
+    const f = proposerFourchette(series, candidates), actuelle = fourchette(ex);
+    if (f[0] === actuelle.min && f[1] === actuelle.max) return { calibre: true };
+    return { reps: f };
+  }
+  // Après une expédition, pour chaque exercice pas encore calibré à son échelon. Une séance où la charge a changé
+  // en cours de route compte au réglage final : les séries d'avant sont rangées sous l'ancien réglage.
   function calibrer(p, seance) {
     const nouvelles = [];
     (seance.exercices || []).forEach(function (fait) {
       const ex = p.programme.filter(function (e) { return e.id === fait.id; })[0];
       if (!ex || !ex.actif || !CATALOGUE[ex.id] || estCalibre(ex) || !fait.series || !fait.series.length) return;
       if (fait.reglage !== reglage(ex, p)) return;   // réglage changé depuis la séance
-      const candidates = fourchettesProposees(ex);
-      const haut = Math.max.apply(null, fait.series), bas = Math.min.apply(null, fait.series);
       const prop = { id: ex.id, cle: cleCalibrage(ex), reglage: reglage(ex, p), seance: seance.id, series: fait.series.slice() };
-      const sens = haut < candidates[0][0] ? -1 : bas > candidates[candidates.length - 1][1] ? 1 : 0;
-      const vers = sens ? changerReglage(ex, sens, p) : null;
-      if (vers) { prop.sens = sens; prop.vers = vers; prop.texte = reglage(vers, p); }
-      else {
-        const f = proposerFourchette(fait.series, candidates), actuelle = fourchette(ex);
-        if (f[0] === actuelle.min && f[1] === actuelle.max) { ex.calibre = prop.cle; return; }
-        prop.reps = f;
-      }
-      nouvelles.push(prop);
+      const e = evaluerCalibrage(p, ex, fait.series);
+      if (e.calibre) { ex.calibre = prop.cle; return; }
+      nouvelles.push(Object.assign(prop, e));
     });
     if (nouvelles.length) {
       const ids = nouvelles.map(function (x) { return x.id; });
@@ -747,16 +817,27 @@
   }
   // Réponse du joueur : accepter applique la proposition, refuser garde le réglage. L'échelon est alors calibré,
   // sauf si le joueur accepte un autre échelon : celui-ci le sera à sa première séance.
+  // accepte = 'alt' : garder la charge et prendre la fourchette proposée en alternative.
   function repondreCalibrage(p, id, accepte) {
     const x = calibragesEnAttente(p).filter(function (c) { return c.id === id; })[0];
     p.calibrages = (p.calibrages || []).filter(function (c) { return c.id !== id; });
     if (!x) return null;
     const i = p.programme.map(function (e) { return e.id; }).indexOf(id);
     const ex = p.programme[i];
+    if (accepte === 'alt') {
+      if (x.alternative) {
+        const coach = fourchetteCoach(ex);
+        if (x.alternative[0] === coach.min && x.alternative[1] === coach.max) delete ex.reps; else ex.reps = x.alternative.slice();
+      }
+      ex.calibre = x.cle;
+      return x;
+    }
     if (accepte && x.vers) {
       const n = Object.assign({}, ex, { niveau: x.vers.niveau, charge: x.vers.charge });
       if (n.niveau === undefined) delete n.niveau;
       if (n.charge === undefined) delete n.charge;
+      // Nouvelle charge : la double progression prend le relais (pas de nouveau calibrage qui ferait l'aller-retour)
+      if (x.charge && aCharge(n)) n.calibre = cleCalibrage(n);
       p.programme[i] = n;
       return x;
     }
@@ -910,6 +991,18 @@
       if ((p.mesures || []).length) p.annonces = (p.annonces || []).concat(['photos']);
       p.v = 10;
     }
+    if (p.v < 11) {
+      // v11 : pour un exercice à charge, le coach propose la charge plutôt qu'une fourchette.
+      // Les propositions de fourchette encore en attente sont refaites avec la nouvelle règle.
+      p.calibrages = (p.calibrages || []).map(function (x) {
+        const ex = p.programme.filter(function (e) { return e.id === x.id; })[0];
+        if (!ex || !aCharge(ex) || !x.reps || !Array.isArray(x.series) || !x.series.length || x.reglage !== reglage(ex, p)) return x;
+        const e = evaluerCalibrage(p, ex, x.series);
+        if (e.calibre) { ex.calibre = x.cle; return null; }
+        return Object.assign({ id: x.id, cle: x.cle, reglage: x.reglage, seance: x.seance, series: x.series.slice() }, e);
+      }).filter(Boolean);
+      p.v = 11;
+    }
     return p;
   }
 
@@ -936,7 +1029,7 @@
   // ---------- Création
   function nouveauProfil(opts) {
     return {
-      v: 10,
+      v: 11,
       photos: [],
       rapports: [],
       elastiques: (opts.elastiques || ELASTIQUES_DEPART).slice(),
@@ -963,7 +1056,8 @@
     libelleElastique: libelleElastique, kgTexte: kgTexte, etapesElastique: etapesElastique, ajusterElastiques: ajusterElastiques,
     FOURCHETTES: FOURCHETTES, fourchette: fourchette, fourchetteCoach: fourchetteCoach, fourchettesProposees: fourchettesProposees,
     proposerFourchette: proposerFourchette, calibrer: calibrer, calibragesEnAttente: calibragesEnAttente,
-    repondreCalibrage: repondreCalibrage, estCalibre: estCalibre,
+    repondreCalibrage: repondreCalibrage, estCalibre: estCalibre, evaluerCalibrage: evaluerCalibrage,
+    aCharge: aCharge, chargesPossibles: chargesPossibles, chargeVisee: chargeVisee, libelleCharge: libelleCharge,
     GROUPES: GROUPES, COMPLEMENTS: COMPLEMENTS, ORDRE: ORDRE, nomGroupe: nomGroupe, defautExercice: defautExercice,
     planSeance: planSeance, definirPriorites: definirPriorites, migrer: migrer,
     MESURES: MESURES, VISITE_JOURS: VISITE_JOURS, mesuresTriees: mesuresTriees, prochaineVisite: prochaineVisite,

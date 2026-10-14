@@ -32,7 +32,7 @@ const lus = () => Array.from(d.querySelectorAll('#bilan svg.toise')).map(s => s.
 
 setTimeout(() => {
   try {
-    verifier(stocke().v === 10 && /Ida fait maintenant un bilan de santé à chaque visite/.test(texte()), 'v9 : le coach invite à voir le bilan');
+    verifier(stocke().v === 11 && /Ida fait maintenant un bilan de santé à chaque visite/.test(texte()), 'v9 : le coach invite à voir le bilan');
     clic('[data-action="voir-bilan"]');
     verifier(w.__ancre === 'bilan' && !(stocke().annonces || []).includes('bilan'), 'le lien mène au bilan et range la note');
     verifier(/Pour ton bilan, Ida a besoin de ta taille/.test(texte()) && lus().length === 2, 'fiche d’admission demandée ; bras et hanches déjà suivis');

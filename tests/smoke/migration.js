@@ -42,7 +42,7 @@ setTimeout(() => {
   try {
     verifier(/Aubin/.test(texte()) && /Carte d’alimentation/.test(texte()), 'la partie existante s’ouvre');
     verifier(/Nouveau : choisis jusqu’à deux groupes musculaires/.test(texte()), 'le coach propose de choisir les priorités');
-    verifier(stocke().profil.v === 10 && stocke().seances.length === 1, 'partie mise à jour et séance conservée');
+    verifier(stocke().profil.v === 11 && stocke().seances.length === 1, 'partie mise à jour et séance conservée');
     verifier(/Jambes et fessiers reviennent : squat et hip thrust/.test(texte()) && !/J’ai suivi ton choix/.test(texte()), 'une partie v1 n’a jamais connu le goblet squat : pas d’annonce des élastiques');
     verifier(/Jambes et fessiers reviennent/.test(texte()) && /Passer à 70 min/.test(texte()), 'le coach annonce le retour des jambes et propose 70 minutes');
     verifier(/Ida veut te voir pour une première visite/.test(texte()), 'convocation à la première visite');

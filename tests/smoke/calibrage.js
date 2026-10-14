@@ -45,7 +45,7 @@ function series(liste) {
 
 setTimeout(() => {
   try {
-    verifier(stocke().v === 10 && /Nouveau : après ta prochaine séance, je te proposerai pour chaque exercice une fourchette/.test(texte()), 'partie v8 : le coach annonce le calibrage');
+    verifier(stocke().v === 11 && /Nouveau : après ta prochaine séance, je te proposerai pour chaque exercice une fourchette/.test(texte()), 'partie v8 : le coach annonce le calibrage');
     clic('[data-action="annonce-lue"][data-id="calibrage"]');
     clic('[data-action="partir"]');
     verifier(d.querySelector('.titre-exo').textContent === 'Tractions assistées, pieds sur une chaise' && /Objectif : 3 séries de 5 à 8/.test(texte()), 'première séance : tractions, fourchette du coach 5 à 8');
