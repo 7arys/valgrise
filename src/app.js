@@ -820,6 +820,13 @@
         '<text x="' + xr + '" y="47" text-anchor="middle" ' + POLICE_TOISE + ' font-size="11" fill="' + GRAPHITE + '">' + esc(chiffre(ind.reference, 1)) + '</text>' +
         '<text x="' + xr + '" y="60" text-anchor="middle" ' + POLICE_TOISE + ' font-size="11" font-weight="600" fill="' + GRAPHITE + '">médiane</text>';
     }
+    if (ind.cible) {
+      // La cible : un losange rouge et un trait fin, son nom à côté
+      const xc = x(ind.cible.valeur), aDroite = xc < W - 52;
+      s += '<line x1="' + xc.toFixed(1) + '" y1="11" x2="' + xc.toFixed(1) + '" y2="30" stroke="' + ROUGE + '" stroke-width="1.4"></line>' +
+        '<path d="M' + xc.toFixed(1) + ' 1 L' + (xc + 5).toFixed(1) + ' 6 L' + xc.toFixed(1) + ' 11 L' + (xc - 5).toFixed(1) + ' 6 Z" fill="' + ROUGE + '"></path>' +
+        '<text x="' + (aDroite ? xc + 8 : xc - 8).toFixed(1) + '" y="10" text-anchor="' + (aDroite ? 'start' : 'end') + '" ' + POLICE_TOISE + ' font-size="11" font-weight="600" fill="' + ROUGE + '">cible ' + esc(String(ind.cible.valeur)) + '</text>';
+    }
     if (avant) {
       const xa = x(avant.valeur);
       s += '<path d="M' + (xa - 5).toFixed(1) + ' 4 L' + (xa + 5).toFixed(1) + ' 4 L' + xa.toFixed(1) + ' 11 Z" fill="' + GRAPHITE + '" opacity="0.55"></path>' +
@@ -829,12 +836,28 @@
     s += '<g filter="url(#encre)"><line x1="' + xv.toFixed(1) + '" y1="8" x2="' + xv.toFixed(1) + '" y2="31" stroke="' + BLEU + '" stroke-width="2.6"></line>' +
       '<path d="M' + (xv - 7).toFixed(1) + ' 2 L' + (xv + 7).toFixed(1) + ' 2 L' + xv.toFixed(1) + ' 11 Z" fill="' + BLEU + '"></path></g>';
     const zone = ind.zone ? ', zone ' + (ind.zone.nom || 'sous les repères') : '';
-    const lu = ind.nom + ' : ' + valeur + zone + (ind.reference ? ', médiane ' + chiffre(ind.reference, 1) : '') + (avant ? ', visite précédente ' + chiffre(avant.valeur, ind.decimales) : '');
+    const lu = ind.nom + ' : ' + valeur + zone + (ind.reference ? ', médiane ' + chiffre(ind.reference, 1) : '') +
+      (ind.cible ? ', cible ' + ind.cible.valeur : '') + (avant ? ', visite précédente ' + chiffre(avant.valeur, ind.decimales) : '');
     return '<div class="toise-ligne"><div class="entete"><p class="mention">' + esc(ind.nom) + '</p><p class="manuscrit">' + esc(valeur) + '</p></div>' +
       '<svg class="toise" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + esc(lu) + '">' + s + '</svg>' +
       (ind.tranche ? '<p class="petit" style="color: var(--graphite)">Repères pour ' + esc(S.profil.sexe === 'femme' ? 'une femme' : 'un homme') + ' de ' + esc(ind.tranche) + '.</p>' : '') +
       (ind.reference ? '<p class="petit" style="color: var(--graphite)">Ta masse maigre ramenée à ta taille. Médiane des ' + esc(S.profil.sexe === 'femme' ? 'femmes' : 'hommes') + ' de 18 à 34 ans : ' + esc(chiffre(ind.reference, 1)) + '.</p>' : '') +
+      (ind.cible ? blocCible(ind.cible) : '') +
       '</div>';
+  }
+  // Sous la toise de la masse maigre : ce qui reste jusqu'à la cible, et le choix de la cible
+  function blocCible(c) {
+    const p = S.profil, homme = p.sexe !== 'femme';
+    const texte = c.ecart > 0
+      ? 'Cible ' + c.valeur + ', silhouette ' + c.nom + ' : encore ' + nombreFr(c.ecart) + ' kg de masse maigre, soit environ ' + Math.round(c.poids) + ' kg à ' + nombreFr(c.graisse) + ' % de graisse.'
+      : 'Cible ' + c.valeur + ' atteinte : choisis la suivante si tu veux continuer.';
+    const options = (V.CIBLES_MAIGRE[p.sexe] || []).map(function (x) {
+      return '<option value="' + x.valeur + '"' + (x.valeur === c.valeur ? ' selected' : '') + '>' + x.valeur + ' · ' + esc(x.nom) + '</option>';
+    }).join('');
+    return '<p class="consigne" style="color: var(--tampon)">' + esc(texte) + '</p>' +
+      '<div class="cible-ligne mt-4"><label class="mention" for="f-cible">Silhouette visée</label>' +
+      '<select class="saisie" id="f-cible" data-cible="1">' + options + '</select></div>' +
+      (homme ? '<p class="petit mt-4" style="color: var(--graphite)">Repère : sans produits, les pratiquants de musculation sont en moyenne vers 22, et le plafond naturel vers 25.</p>' : '');
   }
   function toiseSuivi(suivi) {
     const W = 320, H = 48, valeurs = suivi.points.map(function (pt) { return pt.valeur; });
@@ -2195,6 +2218,11 @@
       recalculer(); persister(); render();
       avis(V.CATALOGUE[ex.id].nom + ' : ' + r[0] + ' à ' + r[1] + ' répétitions par série.');
       return;
+    }
+    if (el.dataset.cible) {
+      const v = +el.value;
+      if ((V.CIBLES_MAIGRE[S.profil.sexe] || []).some(function (x) { return x.valeur === v; })) { S.profil.cibleMaigre = v; persister(); }
+      render(); return;
     }
     if (el.dataset.plan === 'minutes') {
       const v = Math.round(+el.value);

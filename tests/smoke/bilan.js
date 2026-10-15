@@ -61,6 +61,13 @@ setTimeout(() => {
     verifier(stocke().mesures.length === 1 && stocke().mesures[0].graisse === 13.2, 'la visite du jour est complétée, pas dupliquée');
     verifier(lus().some(l => l === 'Masse grasse, selon ta balance : 13,2 %, zone sain') && lus().some(l => /^Indice de masse maigre : 17,4, médiane 18,9/.test(l)), 'masse grasse 13,2 % et indice de masse maigre 17,4');
     verifier(/Repères pour un homme de 20 à 39 ans/.test(texte()), 'repères selon l’âge');
+    verifier(lus().some(l => /^Indice de masse maigre : 17,4, médiane 18,9, cible 20/.test(l)) &&
+      /Cible 20, silhouette athlétique : encore 8,5 kg de masse maigre, soit environ 76 kg à 13,2 % de graisse\./.test(texte()), 'cible 20 : 8,5 kg de masse maigre à gagner, environ 76 kg');
+    verifier(/sans produits, les pratiquants de musculation sont en moyenne vers 22/.test(texte()), 'repère des pratiquants naturels');
+    const cible = d.getElementById('f-cible');
+    cible.value = '22';
+    cible.dispatchEvent(new w.Event('change', { bubbles: true }));
+    verifier(stocke().cibleMaigre === 22 && /Cible 22, silhouette très musclée : encore 15,2 kg de masse maigre/.test(texte()) && d.getElementById('f-cible').value === '22', 'cible passée à 22, enregistrée');
     clic('[data-action="modifier-admission"]');
     verifier(d.querySelector('#f-naissance').value === '1992', 'la fiche se corrige, préremplie');
     saisir('#f-naissance', '1980');

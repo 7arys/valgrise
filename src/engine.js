@@ -213,6 +213,18 @@
     femme: [[20, 39, 21, 33, 39], [40, 59, 23, 34, 40], [60, 79, 24, 36, 42]]
   };
   const MASSE_MAIGRE_MEDIANE = { homme: 18.9, femme: 15.4 };
+  // Cibles d'apparence sur l'indice de masse maigre, nommées comme une silhouette (pas des normes de santé). Repère pour les hommes : des pratiquants
+  // de musculation sans produits sont en moyenne vers 22, le plafond naturel vers 25 (Kouri et al. 1995).
+  const CIBLES_MAIGRE = {
+    homme: [{ valeur: 19, nom: 'en forme' }, { valeur: 20, nom: 'athlétique' }, { valeur: 21, nom: 'musclée' }, { valeur: 22, nom: 'très musclée' }],
+    femme: [{ valeur: 16, nom: 'en forme' }, { valeur: 17, nom: 'athlétique' }, { valeur: 18, nom: 'musclée' }, { valeur: 19, nom: 'très musclée' }]
+  };
+  const CIBLE_MAIGRE_DEFAUT = { homme: 20, femme: 17 };
+  function cibleMaigre(p) {
+    const l = CIBLES_MAIGRE[p.sexe];
+    if (!l) return null;
+    return l.filter(function (c) { return c.valeur === p.cibleMaigre; })[0] || l.filter(function (c) { return c.valeur === CIBLE_MAIGRE_DEFAUT[p.sexe]; })[0];
+  }
   function ageA(p, date) { return p.naissance ? +date.slice(0, 4) - p.naissance : null; }
   function admissionComplete(p) { return !!(p.hauteur && p.naissance && p.sexe); }
   // Poids d'une visite : noté à la visite, sinon la moyenne de la pesée sur 7 jours
@@ -251,6 +263,13 @@
         const ref = MASSE_MAIGRE_MEDIANE[sexe];
         ind.maigre = indicateur({ nom: 'Indice de masse maigre', valeur: pv.kg * (1 - m.graisse / 100) / Math.pow(h / 100, 2), decimales: 1,
           min: homme ? 14 : 11, max: homme ? 24 : 21, pas: 0.5, graduations: [], reference: ref, zones: [] });
+        // Cible : la masse maigre qui manque, et le poids que ça ferait à la masse grasse d'aujourd'hui
+        const c = cibleMaigre(p);
+        if (c) {
+          const visee = c.valeur * Math.pow(h / 100, 2), actuelle = pv.kg * (1 - m.graisse / 100);
+          ind.maigre.cible = { valeur: c.valeur, nom: c.nom, ecart: Math.round((visee - actuelle) * 10) / 10,
+            poids: Math.round(visee / (1 - m.graisse / 100) * 10) / 10, graisse: m.graisse };
+        }
       }
     }
     const visites = mesuresTriees(p).filter(function (x) { return x.date <= m.date; });
@@ -1066,6 +1085,7 @@
     tendancePoids: tendancePoids, seriePoids: seriePoids, rappelPesee: rappelPesee,
     HAUTEUR_MIN: HAUTEUR_MIN, HAUTEUR_MAX: HAUTEUR_MAX, GRAISSE_MIN: GRAISSE_MIN, GRAISSE_MAX: GRAISSE_MAX,
     GRAISSE_REPERES: GRAISSE_REPERES, MASSE_MAIGRE_MEDIANE: MASSE_MAIGRE_MEDIANE, ageA: ageA, admissionComplete: admissionComplete,
+    CIBLES_MAIGRE: CIBLES_MAIGRE, cibleMaigre: cibleMaigre,
     poidsVisite: poidsVisite, bilanIda: bilanIda, noteIda: noteIda,
     ANGLES: ANGLES, photosTriees: photosTriees, photoDe: photoDe, pairesPhotos: pairesPhotos, derniereDatePhotos: derniereDatePhotos,
     promptRegard: promptRegard, lireRegard: lireRegard, libelleAction: libelleAction, appliquerActions: appliquerActions,

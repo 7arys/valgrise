@@ -826,3 +826,25 @@ test('mise à jour v11 : une fourchette en attente pour un exercice à charge de
   assert.deepEqual(ab.reps, [10, 15], 'les exercices au poids du corps gardent leur proposition');
   assert.equal(V.calibragesEnAttente(p).length, 2);
 });
+
+test('bilan d’Ida : une cible de masse maigre, réglable, avec le poids qu’elle ferait', () => {
+  const p = profil({ hauteur: 182, naissance: 1992, sexe: 'homme' });
+  p.pesees = [{ date: D, kg: 66.5 }];
+  const m = { id: 'v1', date: D, bras: 29, taille: 81, hanches: 90, graisse: 13.2 };
+  p.mesures.push(m);
+  let c = V.bilanIda(p, m).indicateurs.maigre.cible;
+  assert.deepEqual(c, { valeur: 20, nom: 'athlétique', ecart: 8.5, poids: 76.3, graisse: 13.2 });
+  p.cibleMaigre = 22;
+  c = V.bilanIda(p, m).indicateurs.maigre.cible;
+  assert.equal(c.valeur, 22);
+  assert.equal(c.nom, 'très musclée');
+  p.cibleMaigre = 30;
+  assert.equal(V.bilanIda(p, m).indicateurs.maigre.cible.valeur, 20, 'cible inconnue : celle par défaut');
+  const f = profil({ hauteur: 165, naissance: 1994, sexe: 'femme' });
+  const mf = { id: 'v1', date: D, taille: 70, graisse: 26, poids: 58 };
+  f.mesures.push(mf);
+  assert.equal(V.bilanIda(f, mf).indicateurs.maigre.cible.valeur, 17);
+  const sans = profil({ hauteur: 182, naissance: 1992, sexe: 'homme' });
+  const ms = { id: 'v1', date: D, bras: 29, taille: 81, poids: 66.5 };
+  assert.equal(V.bilanIda(sans, ms).indicateurs.maigre, undefined, 'sans masse grasse, ni masse maigre ni cible');
+});
